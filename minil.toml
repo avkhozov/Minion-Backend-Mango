@@ -1,0 +1,4 @@
+name = "Minion-Backend-Mango"
+# badges = ["travis"]
+module_maker="ModuleBuildTiny"
+
