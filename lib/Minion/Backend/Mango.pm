@@ -423,6 +423,12 @@ Unregister worker.
 
 Get information about a worker or return C<undef> if worker does not exist.
 
+=head1 AUTHOR
+
+Andrey Khozov E<lt>avkhozov@gmail.comE<gt>
+
+Sebastian Riedel E<lt>sri@cpan.orgE<gt>
+
 =head1 LICENSE
 
 Copyright (C) 2014, Sebastian Riedel.
@@ -430,12 +436,6 @@ Copyright (C) 2014, Sebastian Riedel.
 Copyright (C) 2015, Andrey Khozov.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
-
-=head1 AUTHOR
-
-Sebastian Riedel, C<sri@cpan.org>.
-
-Andrey Khozov, C<avkhozov@googlemail.com>.
 
 =head1 SEE ALSO
 

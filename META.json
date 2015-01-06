@@ -1,5 +1,5 @@
 {
-   "abstract" : "It's new $module",
+   "abstract" : "Mango backend for Minion",
    "author" : [
       "Andrey Khozov <avkhozov@gmail.com>"
    ],
@@ -42,7 +42,8 @@
       },
       "runtime" : {
          "requires" : {
-            "perl" : "5.008001"
+            "Mango" : "1",
+            "Minion" : "1"
          }
       },
       "test" : {
@@ -52,5 +53,17 @@
       }
    },
    "release_status" : "unstable",
-   "version" : "0.01"
+   "resources" : {
+      "bugtracker" : {
+         "web" : "https://github.com/avkhozov/Minion-Backend-Mango/issues"
+      },
+      "homepage" : "https://github.com/avkhozov/Minion-Backend-Mango",
+      "repository" : {
+         "type" : "git",
+         "url" : "git://github.com/avkhozov/Minion-Backend-Mango.git",
+         "web" : "https://github.com/avkhozov/Minion-Backend-Mango"
+      }
+   },
+   "version" : "0.90",
+   "x_authority" : "cpan:AVKHOZOV"
 }
