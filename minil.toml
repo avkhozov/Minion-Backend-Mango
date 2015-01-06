@@ -1,4 +1,5 @@
+allow_pureperl = 1
+authority = "cpan:AVKHOZOV"
+badges = ['travis']
+module_maker = "ModuleBuildTiny"
 name = "Minion-Backend-Mango"
-# badges = ["travis"]
-module_maker="ModuleBuildTiny"
-
