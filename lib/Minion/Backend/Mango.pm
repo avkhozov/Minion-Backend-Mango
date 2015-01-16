@@ -23,8 +23,9 @@ sub dequeue {
 
   # Await notifications
   $self->_await;
+  my $job = $self->_try($oid);
 
-  return undef unless $self->_job_info($self->_try($oid));
+  return undef unless $self->_job_info($job);
   return {args => $job->{args}, id => $job->{_id}, task => $job->{task}};
 }
 
