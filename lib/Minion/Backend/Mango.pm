@@ -16,17 +16,15 @@ has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.worker
 
 
 sub dequeue {
-  my ($self, $oid, $timeout) = @_;
+  my ($self, $oid) = @_;
 
   # Capped collection for notifications
   $self->_notifications;
 
   # Await notifications
-  my $end = bson_time->to_epoch + $timeout;
-  my $job;
-  do { $self->_await and $job = $self->_try($oid) } while !$job && bson_time->to_epoch < $end;
+  $self->_await;
 
-  return undef unless $self->_job_info($job ||= $self->_try($oid));
+  return undef unless $self->_job_info($self->_try($oid));
   return {args => $job->{args}, id => $job->{_id}, task => $job->{task}};
 }
 
@@ -103,8 +101,7 @@ sub repair {
   my $jobs = $self->jobs;
   $cursor = $jobs->find({state => 'active'});
   while (my $job = $cursor->next) {
-    $jobs->save({%$job, state => 'failed', error => 'Worker went away'})
-      unless $workers->find_one($job->{worker});
+    $jobs->save({%$job, state => 'failed', error => 'Worker went away'}) unless $workers->find_one($job->{worker});
   }
 
   # Old jobs
@@ -147,8 +144,7 @@ sub _await {
   my $self = shift;
 
   my $last = $self->{last} //= bson_oid(0 x 24);
-  my $cursor =
-    $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
+  my $cursor = $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
   return undef unless my $doc = $cursor->next || $cursor->next;
   $self->{last} = $doc->{_id};
   return 1;
@@ -189,11 +185,8 @@ sub _try {
   my ($self, $oid) = @_;
 
   my $doc = {
-    query => {
-      delayed => {'$lt' => bson_time},
-      state   => 'inactive',
-      task    => {'$in' => [keys %{$self->minion->tasks}]}
-    },
+    query =>
+      {delayed => {'$lt' => bson_time}, state => 'inactive', task => {'$in' => [keys %{$self->minion->tasks}]}},
     fields => {args     => 1, task => 1},
     sort   => {priority => -1},
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
