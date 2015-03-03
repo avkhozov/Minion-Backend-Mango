@@ -1,16 +1,14 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Added indexes for jobs collection.
 
 0.92 2015-01-17T07:24:14Z
-
     - Improved timeout management.
     - Capped collection for notifications limited only by size, not max number of documents.
 
 0.91 2015-01-07T17:59:19Z
-
     - First authorized release.
 
 0.90 2015-01-06T17:07:25Z
-
     - First release.

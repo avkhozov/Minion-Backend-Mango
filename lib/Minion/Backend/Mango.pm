@@ -4,7 +4,7 @@ use Mojo::Base 'Minion::Backend';
 our $VERSION = '0.92';
 
 use Mango;
-use Mango::BSON qw(bson_oid bson_time);
+use Mango::BSON qw(bson_oid bson_time bson_doc);
 use Scalar::Util 'weaken';
 use Sys::Hostname 'hostname';
 
@@ -13,7 +13,6 @@ has jobs          => sub { $_[0]->mango->db->collection($_[0]->prefix . '.jobs')
 has notifications => sub { $_[0]->mango->db->collection($_[0]->prefix . '.notifications') };
 has prefix        => 'minion';
 has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.workers') };
-
 
 sub dequeue {
   my ($self, $oid) = @_;
@@ -79,7 +78,8 @@ sub list_workers {
 sub new { shift->SUPER::new(mango => Mango->new(@_)) }
 
 sub register_worker {
-  shift->workers->insert({host => hostname, pid => $$, started => bson_time});
+  $_[0]->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1));
+  $_[0]->workers->insert({host => hostname, pid => $$, started => bson_time});
 }
 
 sub remove_job {
@@ -186,8 +186,11 @@ sub _try {
   my ($self, $oid) = @_;
 
   my $doc = {
-    query =>
-      {delayed => {'$lt' => bson_time}, state => 'inactive', task => {'$in' => [keys %{$self->minion->tasks}]}},
+    query => bson_doc(
+      delayed => {'$lt' => bson_time},
+      state   => 'inactive',
+      task    => {'$in' => [keys %{$self->minion->tasks}]}
+    ),
     fields => {args     => 1, task => 1},
     sort   => {priority => -1},
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
