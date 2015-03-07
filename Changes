@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+
+0.93 2015-03-07T08:51:04Z
     - Added indexes for jobs collection.
 
 0.92 2015-01-17T07:24:14Z
