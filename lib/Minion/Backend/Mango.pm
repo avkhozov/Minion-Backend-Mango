@@ -78,8 +78,14 @@ sub list_workers {
 sub new { shift->SUPER::new(mango => Mango->new(@_)) }
 
 sub register_worker {
-  $_[0]->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1));
-  $_[0]->workers->insert({host => hostname, pid => $$, started => bson_time});
+  my ($self, $id) = @_;
+
+  return $id
+    if $id
+    && $self->workers->find_and_modify({query => {_id => $id}, update => {'$set' => {notified => bson_time}}});
+
+  $self->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1));
+  $self->workers->insert({host => hostname, pid => $$, started => bson_time, notified => bson_time});
 }
 
 sub remove_job {
@@ -89,25 +95,23 @@ sub remove_job {
 }
 
 sub repair {
-  my $self = shift;
+  my $self   = shift;
+  my $minion = $self->minion;
 
-  # Check workers on this host (all should be owned by the same user)
+  # Check worker registry
   my $workers = $self->workers;
-  my $cursor = $workers->find({host => hostname});
-  while (my $worker = $cursor->next) {
-    $workers->remove($worker->{_id}) unless kill 0, $worker->{pid};
-  }
+  $workers->remove({notified => {'$lt' => bson_time((time - $minion->missing_after) * 1000)}});
 
   # Abandoned jobs
   my $jobs = $self->jobs;
-  $cursor = $jobs->find({state => 'active'});
+  my $cursor = $jobs->find({state => 'active'});
   while (my $job = $cursor->next) {
-    $jobs->save({%$job, state => 'failed', error => 'Worker went away'}) unless $workers->find_one($job->{worker});
+    $jobs->save({%$job, finished => bson_time, state => 'failed', error => 'Worker went away'})
+      unless $workers->find_one($job->{worker});
   }
 
   # Old jobs
-  my $after = bson_time((time - $self->minion->remove_after) * 1000);
-  $jobs->remove({state => 'finished', finished => {'$lt' => $after}});
+  $jobs->remove({state => 'finished', finished => {'$lt' => bson_time((time - $minion->remove_after) * 1000)}});
 }
 
 sub reset { $_->options && $_->drop for $_[0]->workers, $_[0]->jobs }
@@ -178,7 +182,7 @@ sub _notifications {
   $self->{capped} ? return : $self->{capped}++;
   my $notifications = $self->notifications;
   return if $notifications->options;
-  $notifications->create({capped => \1, max => 128});
+  $notifications->create({capped => \1, size => 1048576, max => 128});
   $notifications->insert({});
 }
 
@@ -375,8 +379,9 @@ Construct a new L<Minion::Backend::Mango> object.
 =head2 register_worker
 
   my $worker_id = $backend->register_worker;
+  my $worker_id = $backend->register_worker($worker_id);
 
-Register worker.
+Register worker or send heartbeat to show that this worker is still alive.
 
 =head2 remove_job
 

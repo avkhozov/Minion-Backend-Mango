@@ -30,7 +30,7 @@ is $worker->register->info->{host}, hostname, 'right host';
 is $worker->info->{pid}, $$, 'right pid';
 is $worker->unregister->info, undef, 'no information';
 
-# Repair dead worker
+# Repair missing worker
 $minion->add_task(test => sub { });
 my $worker2 = $minion->worker->register;
 isnt $worker2->id, $worker->id, 'new id';
@@ -43,13 +43,13 @@ undef $worker2;
 is $job->info->{state}, 'active', 'job is still active';
 my $doc = $workers->find_one($id);
 ok $doc, 'is registered';
-my $pid = 4000;
-$pid++ while kill 0, $pid;
-$workers->save({%$doc, pid => $pid});
+$minion->backend->workers->update({_id => $id},
+  {'$set' => {notified => bson_time((time - $minion->missing_after - 1) * 1000)}});
 $minion->repair;
 ok !$minion->backend->worker_info($id), 'not registered';
-is $job->info->{state}, 'failed',           'job is no longer active';
-is $job->info->{error}, 'Worker went away', 'right error';
+like $job->info->{finished}, qr/^[\d.]+$/,       'has finished timestamp';
+is $job->info->{state},      'failed',           'job is no longer active';
+is $job->info->{error},      'Worker went away', 'right error';
 
 # Repair abandoned job
 $worker->register;

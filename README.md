@@ -139,8 +139,9 @@ Construct a new [Minion::Backend::Mango](https://metacpan.org/pod/Minion::Backen
 ## register\_worker
 
     my $worker_id = $backend->register_worker;
+    my $worker_id = $backend->register_worker($worker_id);
 
-Register worker.
+Register worker or send heartbeat to show that this worker is still alive.
 
 ## remove\_job
 
