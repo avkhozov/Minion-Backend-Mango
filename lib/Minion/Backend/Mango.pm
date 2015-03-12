@@ -144,7 +144,7 @@ sub worker_info { $_[0]->_worker_info($_[0]->workers->find_one($_[1])) }
 sub _await {
   my $self = shift;
 
-  my $last = $self->{last} //= bson_oid(0 x 24);
+  my $last = $self->{last} //= bson_oid;
   my $cursor = $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
   return undef unless my $doc = $cursor->next || $cursor->next;
   $self->{last} = $doc->{_id};
@@ -178,7 +178,7 @@ sub _notifications {
   $self->{capped} ? return : $self->{capped}++;
   my $notifications = $self->notifications;
   return if $notifications->options;
-  $notifications->create({capped => \1, size => 1048576});
+  $notifications->create({capped => \1, size => 128});
   $notifications->insert({});
 }
 
