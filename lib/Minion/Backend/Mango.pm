@@ -178,7 +178,7 @@ sub _notifications {
   $self->{capped} ? return : $self->{capped}++;
   my $notifications = $self->notifications;
   return if $notifications->options;
-  $notifications->create({capped => \1, size => 128});
+  $notifications->create({capped => \1, max => 128});
   $notifications->insert({});
 }
 
