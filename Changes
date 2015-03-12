@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Set limit for capped collection size to 128.
+    - Improved performance by following only new jobs at the start.
 
 0.93 2015-03-07T08:51:04Z
     - Added indexes for jobs collection.
