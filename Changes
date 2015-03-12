@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+
+0.94 2015-03-12T16:07:19Z
     - Added support for monitoring workers with heartbeats.
     - Set limit for capped collection size to 128.
     - Improved performance by following only new jobs at the start.
