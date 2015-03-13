@@ -219,11 +219,12 @@ sub _worker_info {
   return undef unless my $worker = shift;
   my $cursor = $self->jobs->find({state => 'active', worker => $worker->{_id}});
   return {
-    host    => $worker->{host},
-    id      => $worker->{_id},
-    jobs    => [map { $_->{_id} } @{$cursor->all}],
-    pid     => $worker->{pid},
-    started => $worker->{started}->to_epoch
+    host     => $worker->{host},
+    id       => $worker->{_id},
+    jobs     => [map { $_->{_id} } @{$cursor->all}],
+    pid      => $worker->{pid},
+    started  => $worker->{started}->to_epoch,
+    notified => $worker->{notified}->to_epoch
   };
 }
 
