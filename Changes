@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+
+0.95 2015-03-13T07:07:47Z
     - Added notified field to worker_info output.
 
 0.94 2015-03-12T16:07:19Z
