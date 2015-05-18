@@ -1,6 +1,7 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Added support for retrying jobs with delays.
     - Improved job_info method for compatibility with Minion. Renamed error
       to result field.
 

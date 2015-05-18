@@ -119,12 +119,17 @@ sub repair {
 sub reset { $_->options && $_->drop for $_[0]->workers, $_[0]->jobs }
 
 sub retry_job {
-  my ($self, $oid) = @_;
+  my ($self, $oid) = (shift, shift);
+  my $options = shift // {};
 
   my $query = {_id => $oid, state => {'$in' => [qw(failed finished)]}};
   my $update = {
     '$inc' => {retries => 1},
-    '$set' => {retried => bson_time, state => 'inactive'},
+    '$set' => {
+      retried => bson_time,
+      state   => 'inactive',
+      delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1)
+    },
     '$unset' => {map { $_ => '' } qw(finished result started worker)}
   };
 

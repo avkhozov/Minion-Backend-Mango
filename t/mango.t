@@ -294,6 +294,14 @@ ok $job->retry,  'job retried';
 ok $minion->job($id)->info->{delayed} < time, 'no delayed timestamp';
 ok $job->remove, 'job removed';
 ok !$job->retry, 'job not retried';
+$id = $minion->enqueue(add => [6, 9]);
+$job = $worker->dequeue(0);
+ok $job->info->{delayed} < time, 'no delayed timestamp';
+ok $job->fail, 'job failed';
+ok $job->retry({delay => 100}), 'job retried with delay';
+is $job->info->{retries}, 1, 'job has been retried once';
+ok $job->info->{delayed} > time, 'delayed timestamp';
+ok $minion->job($id)->remove, 'job has been removed';
 $worker->unregister;
 
 # Failed jobs
