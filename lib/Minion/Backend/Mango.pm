@@ -82,7 +82,8 @@ sub register_worker {
 
   return $id
     if $id
-    && $self->workers->find_and_modify({query => {_id => $id}, update => {'$set' => {notified => bson_time}}});
+    && $self->workers->find_and_modify(
+    {query => {_id => $id}, update => {'$set' => {notified => bson_time}}});
 
   $self->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1));
   $self->workers->insert({host => hostname, pid => $$, started => bson_time, notified => bson_time});
@@ -106,12 +107,13 @@ sub repair {
   my $jobs = $self->jobs;
   my $cursor = $jobs->find({state => 'active'});
   while (my $job = $cursor->next) {
-    $jobs->save({%$job, finished => bson_time, state => 'failed', error => 'Worker went away'})
+    $jobs->save({%$job, finished => bson_time, state => 'failed', result => 'Worker went away'})
       unless $workers->find_one($job->{worker});
   }
 
   # Old jobs
-  $jobs->remove({state => 'finished', finished => {'$lt' => bson_time((time - $minion->remove_after) * 1000)}});
+  $jobs->remove(
+    {state => 'finished', finished => {'$lt' => bson_time((time - $minion->remove_after) * 1000)}});
 }
 
 sub reset { $_->options && $_->drop for $_[0]->workers, $_[0]->jobs }
@@ -123,7 +125,7 @@ sub retry_job {
   my $update = {
     '$inc' => {retries => 1},
     '$set' => {retried => bson_time, state => 'inactive'},
-    '$unset' => {map { $_ => '' } qw(error finished result started worker)}
+    '$unset' => {map { $_ => '' } qw(finished result started worker)}
   };
 
   return !!$self->jobs->update($query, $update)->{n};
@@ -149,7 +151,8 @@ sub _await {
   my $self = shift;
 
   my $last = $self->{last} //= bson_oid;
-  my $cursor = $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
+  my $cursor =
+    $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
   return undef unless my $doc = $cursor->next || $cursor->next;
   $self->{last} = $doc->{_id};
   return 1;
@@ -163,10 +166,10 @@ sub _job_info {
     args     => $job->{args},
     created  => $job->{created} ? $job->{created}->to_epoch : undef,
     delayed  => $job->{delayed} ? $job->{delayed}->to_epoch : undef,
-    error    => $job->{error},
     finished => $job->{finished} ? $job->{finished}->to_epoch : undef,
     id       => $job->{_id},
     priority => $job->{priority},
+    result   => $job->{result},
     retried  => $job->{retried} ? $job->{retried}->to_epoch : undef,
     retries => $job->{retries} // 0,
     started => $job->{started} ? $job->{started}->to_epoch : undef,
@@ -208,7 +211,7 @@ sub _update {
   my ($self, $fail, $oid, $err) = @_;
 
   my $update = {finished => bson_time, state => $fail ? 'failed' : 'finished'};
-  $update->{error} = $err if $fail;
+  $update->{result} = $err if $fail;
   my $query = {_id => $oid, state => 'active'};
   return !!$self->jobs->update($query, {'$set' => $update})->{n};
 }

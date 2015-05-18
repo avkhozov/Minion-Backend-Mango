@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Improved job_info method for compatibility with Minion. Renamed error
+      to result field.
 
 0.95 2015-03-13T07:07:47Z
     - Added notified field to worker_info output.
@@ -15,7 +17,8 @@ Revision history for Perl extension Minion-Backend-Mango
 
 0.92 2015-01-17T07:24:14Z
     - Improved timeout management.
-    - Capped collection for notifications limited only by size, not max number of documents.
+    - Capped collection for notifications limited only by size, not max number
+      of documents.
 
 0.91 2015-01-07T17:59:19Z
     - First authorized release.

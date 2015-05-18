@@ -49,7 +49,7 @@ $minion->repair;
 ok !$minion->backend->worker_info($id), 'not registered';
 like $job->info->{finished}, qr/^[\d.]+$/,       'has finished timestamp';
 is $job->info->{state},      'failed',           'job is no longer active';
-is $job->info->{error},      'Worker went away', 'right error';
+is $job->info->{result},     'Worker went away', 'right result';
 
 # Repair abandoned job
 $worker->register;
@@ -58,8 +58,8 @@ $job = $worker->dequeue(0);
 is $job->id, $id, 'right id';
 $worker->unregister;
 $minion->repair;
-is $job->info->{state}, 'failed',           'job is no longer active';
-is $job->info->{error}, 'Worker went away', 'right error';
+is $job->info->{state},  'failed',           'job is no longer active';
+is $job->info->{result}, 'Worker went away', 'right result';
 
 # Repair old jobs
 $worker->register;
@@ -251,7 +251,7 @@ ok $job->retry, 'job retried';
 is $job->info->{retries}, 2, 'job has been retried twice';
 ok !$job->info->{finished}, 'no finished timestamp';
 ok !$job->info->{started},  'no started timestamp';
-ok !$job->info->{error},    'no error';
+ok !$job->info->{result},   'no result';
 ok !$job->info->{worker},   'no worker';
 $job = $worker->dequeue(0);
 is $job->info->{state}, 'active', 'right state';
@@ -300,23 +300,23 @@ $worker->unregister;
 $id = $minion->enqueue(add => [5, 6]);
 $job = $worker->register->dequeue(0);
 is $job->id, $id, 'right id';
-is $job->info->{error}, undef, 'no error';
+is $job->info->{result}, undef, 'no result';
 ok $job->fail, 'job failed';
 ok !$job->finish, 'job not finished';
-is $job->info->{state}, 'failed',        'right state';
-is $job->info->{error}, 'Unknown error', 'right error';
+is $job->info->{state},  'failed',        'right state';
+is $job->info->{result}, 'Unknown error', 'right result';
 $id = $minion->enqueue(add => [6, 7]);
 $job = $worker->dequeue(0);
 is $job->id, $id, 'right id';
 ok $job->fail('Something bad happened!'), 'job failed';
 is $job->info->{state}, 'failed', 'right state';
-is $job->info->{error}, 'Something bad happened!', 'right error';
+is $job->info->{result}, 'Something bad happened!', 'right result';
 $id  = $minion->enqueue('fail');
 $job = $worker->dequeue(0);
 is $job->id, $id, 'right id';
 $job->perform;
 is $job->info->{state}, 'failed', 'right state';
-is $job->info->{error}, "Intentional failure!\n", 'right error';
+is $job->info->{result}, "Intentional failure!\n", 'right result';
 $worker->unregister;
 $minion->reset;
 
