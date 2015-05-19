@@ -164,8 +164,17 @@ Reset job queue.
 ## retry\_job
 
     my $bool = $backend->retry_job($job_id);
+    my $bool = $backend->retry_job($job_id, {delay => 10});
 
 Transition from `failed` or `finished` state back to `inactive`.
+
+These options are currently available:
+
+- delay
+
+        delay => 10
+
+    Delay job for this many seconds (from now).
 
 ## stats
 
