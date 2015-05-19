@@ -42,8 +42,8 @@
       },
       "runtime" : {
          "requires" : {
-            "Mango" : "1.14",
-            "Minion" : "1.05"
+            "Mango" : "1.17",
+            "Minion" : "1.15"
          }
       },
       "test" : {
