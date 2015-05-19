@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Improved documentation.
+    - Fixed versions in cpanfile: Minion (1.15), Mango (1.17).
 
 0.96 2015-05-18T17:58:06Z
     - Added support for retrying jobs with delays.
