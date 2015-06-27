@@ -6,7 +6,6 @@ plan skip_all => 'set TEST_ONLINE to enable this test' unless $ENV{TEST_ONLINE};
 
 use Mango::BSON qw(bson_oid bson_time);
 use Minion;
-use Mojo::IOLoop;
 use Sys::Hostname 'hostname';
 use Time::HiRes 'time';
 

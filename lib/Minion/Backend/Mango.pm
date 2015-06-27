@@ -5,7 +5,6 @@ our $VERSION = '0.97';
 
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
-use Scalar::Util 'weaken';
 use Sys::Hostname 'hostname';
 
 has 'mango';
@@ -45,7 +44,6 @@ sub enqueue {
     task     => $task
   };
 
-  # Blocking
   my $oid = $self->jobs->insert($doc);
   $self->notifications->insert({c => 'created'});
   return $oid;
