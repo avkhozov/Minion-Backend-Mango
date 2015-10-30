@@ -16,15 +16,12 @@ has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.worker
 sub dequeue {
   my ($self, $oid) = @_;
 
-  # Capped collection for notifications
   $self->_notifications;
 
-  # Await notifications
-  $self->_await;
-  my $job = $self->_try($oid);
+  if (my $job = $self->_try($oid)) { return $self->_job_info($job) }
 
-  return undef unless $self->_job_info($job);
-  return {args => $job->{args}, id => $job->{_id}, task => $job->{task}};
+  $self->_await;
+  return $self->_job_info($self->_try($oid));
 }
 
 sub enqueue {
@@ -40,6 +37,7 @@ sub enqueue {
     created => bson_time,
     delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
     priority => $options->{priority} // 0,
+    retries  => 0,
     state    => 'inactive',
     task     => $task
   };
@@ -117,16 +115,17 @@ sub repair {
 sub reset { $_->options && $_->drop for $_[0]->workers, $_[0]->jobs }
 
 sub retry_job {
-  my ($self, $oid) = (shift, shift);
+  my ($self, $oid, $retries) = (shift, shift, shift);
   my $options = shift // {};
 
-  my $query = {_id => $oid, state => {'$in' => [qw(failed finished)]}};
+  my $query = {_id => $oid, retries => $retries, state => {'$in' => [qw(failed finished)]}};
   my $update = {
     '$inc' => {retries => 1},
     '$set' => {
       retried => bson_time,
       state   => 'inactive',
-      delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1)
+      delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
+      priority => $options->{priority} // 0,
     },
     '$unset' => {map { $_ => '' } qw(finished result started worker)}
   };
@@ -201,7 +200,7 @@ sub _try {
       state   => 'inactive',
       task    => {'$in' => [keys %{$self->minion->tasks}]}
     ),
-    fields => {args     => 1, task => 1},
+    fields => {args     => 1, task => 1, retries => 1},
     sort   => {priority => -1},
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
     new    => 1
@@ -211,10 +210,9 @@ sub _try {
 }
 
 sub _update {
-  my ($self, $fail, $oid, $err) = @_;
+  my ($self, $fail, $oid, $retries, $result) = @_;
 
-  my $update = {finished => bson_time, state => $fail ? 'failed' : 'finished'};
-  $update->{result} = $err if $fail;
+  my $update = {finished => bson_time, result => $result, state => $fail ? 'failed' : 'finished'};
   my $query = {_id => $oid, state => 'active'};
   return !!$self->jobs->update($query, {'$set' => $update})->{n};
 }
@@ -424,6 +422,12 @@ These options are currently available:
   delay => 10
 
 Delay job for this many seconds (from now).
+
+=item priority
+
+  priority => 5
+
+Job priority.
 
 =back
 
