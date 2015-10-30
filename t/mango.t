@@ -4,10 +4,11 @@ use Test::More;
 
 plan skip_all => 'set TEST_ONLINE to enable this test' unless $ENV{TEST_ONLINE};
 
-use Mango::BSON qw(bson_oid bson_time);
+use Mango::BSON qw/bson_oid bson_time/;
 use Minion;
+use Mojo::IOLoop;
 use Sys::Hostname 'hostname';
-use Time::HiRes 'time';
+use Time::HiRes qw/time usleep/;
 
 # Clean up before start
 my $minion = Minion->new(Mango => $ENV{TEST_ONLINE});
@@ -109,19 +110,14 @@ is $worker->dequeue(0.5), undef, 'no jobs yet';
 ok !!(($before + 0.5) <= time), 'waited for jobs';
 $worker->unregister;
 
-# Tasks
-my $add = $jobs->insert({results => []});
+# Stats
 $minion->add_task(
   add => sub {
     my ($job, $first, $second) = @_;
-    my $doc = $job->minion->backend->jobs->find_one($add);
-    push @{$doc->{results}}, $first + $second;
-    $job->minion->backend->jobs->save($doc);
+    $job->finish({added => $first + $second});
   }
 );
 $minion->add_task(fail => sub { die "Intentional failure!\n" });
-
-# Stats
 my $stats = $minion->stats;
 is $stats->{active_workers},   0, 'no active workers';
 is $stats->{inactive_workers}, 0, 'no inactive workers';
@@ -220,7 +216,7 @@ is $minion->backend->worker_info($id)->{pid}, $$, 'right worker';
 ok !$job->info->{finished}, 'no finished timestamp';
 $job->perform;
 like $job->info->{finished}, qr/^[\d.]+$/, 'has finished timestamp';
-is_deeply $jobs->find_one($add)->{results}, [4], 'right result';
+is_deeply $job->info->{result}, {added => 4}, 'right result';
 is $job->info->{state}, 'finished', 'right state';
 $worker->unregister;
 $job = $minion->job($job->id);
@@ -342,6 +338,86 @@ is $job->id, $id, 'right id';
 $job->perform;
 is $job->info->{state}, 'failed', 'right state';
 is $job->info->{result}, "Intentional failure!\n", 'right result';
+$worker->unregister;
+$minion->reset;
+
+# Nested data structures
+$minion->add_task(
+  nested => sub {
+    my ($job, $hash, $array) = @_;
+    $job->finish([{23 => $hash->{first}[0]{second} x $array->[0][0]}]);
+  }
+);
+$minion->enqueue(nested => [{first => [{second => 'test'}]}, [[3]]]);
+$job = $worker->register->dequeue(0);
+$job->perform;
+is $job->info->{state}, 'finished', 'right state';
+is_deeply $job->info->{result}, [{23 => 'testtesttest'}], 'right structure';
+$worker->unregister;
+
+# Perform job in a running event loop
+$id = $minion->enqueue(add => [8, 9]);
+Mojo::IOLoop->delay(sub { $minion->perform_jobs })->wait;
+is $minion->job($id)->info->{state}, 'finished', 'right state';
+is_deeply $minion->job($id)->info->{result}, {added => 17}, 'right result';
+
+# Non-zero exit status
+$minion->add_task(exit => sub { exit 1 });
+$id  = $minion->enqueue('exit');
+$job = $worker->register->dequeue(0);
+is $job->id, $id, 'right id';
+$job->perform;
+is $job->info->{state}, 'failed', 'right state';
+is $job->info->{result}, 'Non-zero exit status (1)', 'right result';
+$worker->unregister;
+
+# A job needs to be dequeued again after a retry
+$minion->add_task(restart => sub { });
+$id  = $minion->enqueue('restart');
+$job = $worker->register->dequeue(0);
+is $job->id, $id, 'right id';
+ok $job->finish, 'job finished';
+is $job->info->{state}, 'finished', 'right state';
+ok $job->retry, 'job retried';
+is $job->info->{state}, 'inactive', 'right state';
+$job2 = $worker->dequeue(0);
+is $job->info->{state}, 'active', 'right state';
+ok !$job->finish, 'job not finished';
+is $job->info->{state}, 'active', 'right state';
+is $job2->id, $id, 'right id';
+ok $job2->finish, 'job finished';
+ok !$job->retry, 'job not retried';
+is $job->info->{state}, 'finished', 'right state';
+$worker->unregister;
+
+# Perform jobs concurrently
+$id  = $minion->enqueue(add => [10, 11]);
+$id2 = $minion->enqueue(add => [12, 13]);
+$id3 = $minion->enqueue('test');
+my $id4 = $minion->enqueue('exit');
+$worker = $minion->worker->register;
+$job    = $worker->dequeue(0);
+$job2   = $worker->dequeue(0);
+my $job3 = $worker->dequeue(0);
+my $job4 = $worker->dequeue(0);
+my $pid  = $job->start;
+my $pid2 = $job2->start;
+my $pid3 = $job3->start;
+my $pid4 = $job4->start;
+my ($first, $second, $third, $fourth);
+usleep 50000
+  until $first ||= $job->is_finished($pid)
+  and $second  ||= $job2->is_finished($pid2)
+  and $third   ||= $job3->is_finished($pid3)
+  and $fourth  ||= $job4->is_finished($pid4);
+is $minion->job($id)->info->{state}, 'finished', 'right state';
+is_deeply $minion->job($id)->info->{result}, {added => 21}, 'right result';
+is $minion->job($id2)->info->{state}, 'finished', 'right state';
+is_deeply $minion->job($id2)->info->{result}, {added => 25}, 'right result';
+is $minion->job($id3)->info->{state},  'finished',                 'right state';
+is $minion->job($id3)->info->{result}, undef,                      'no result';
+is $minion->job($id4)->info->{state},  'failed',                   'right state';
+is $minion->job($id4)->info->{result}, 'Non-zero exit status (1)', 'right result';
 $worker->unregister;
 $minion->reset;
 

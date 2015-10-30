@@ -213,7 +213,7 @@ sub _update {
   my ($self, $fail, $oid, $retries, $result) = @_;
 
   my $update = {finished => bson_time, result => $result, state => $fail ? 'failed' : 'finished'};
-  my $query = {_id => $oid, state => 'active'};
+  my $query = {_id => $oid, retries => $retries, state => 'active'};
   return !!$self->jobs->update($query, {'$set' => $update})->{n};
 }
 
