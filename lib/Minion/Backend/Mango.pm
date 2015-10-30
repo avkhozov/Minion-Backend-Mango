@@ -14,14 +14,14 @@ has prefix        => 'minion';
 has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.workers') };
 
 sub dequeue {
-  my ($self, $oid) = @_;
+  my ($self, $oid, $wait, $options) = @_;
 
   $self->_notifications;
 
-  if (my $job = $self->_try($oid)) { return $self->_job_info($job) }
+  if (my $job = $self->_try($oid, $options)) { return $self->_job_info($job) }
 
   $self->_await;
-  return $self->_job_info($self->_try($oid));
+  return $self->_job_info($self->_try($oid, $options));
 }
 
 sub enqueue {
@@ -37,6 +37,7 @@ sub enqueue {
     created => bson_time,
     delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
     priority => $options->{priority} // 0,
+    queue    => $options->{queue}    // 'default',
     retries  => 0,
     state    => 'inactive',
     task     => $task
@@ -81,7 +82,7 @@ sub register_worker {
     && $self->workers->find_and_modify(
     {query => {_id => $id}, update => {'$set' => {notified => bson_time}}});
 
-  $self->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1));
+  $self->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1, queue => 1));
   $self->workers->insert({host => hostname, pid => $$, started => bson_time, notified => bson_time});
 }
 
@@ -125,7 +126,8 @@ sub retry_job {
       retried => bson_time,
       state   => 'inactive',
       delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
-      priority => $options->{priority} // 0,
+      (defined $options->{priority} ? (priority => $options->{priority}) : ()),
+      (defined $options->{queue}    ? (queue    => $options->{queue})    : ())
     },
     '$unset' => {map { $_ => '' } qw(finished result started worker)}
   };
@@ -171,6 +173,7 @@ sub _job_info {
     finished => $job->{finished} ? $job->{finished}->to_epoch : undef,
     id       => $job->{_id},
     priority => $job->{priority},
+    queue    => $job->{queue},
     result   => $job->{result},
     retried  => $job->{retried} ? $job->{retried}->to_epoch : undef,
     retries => $job->{retries} // 0,
@@ -192,16 +195,17 @@ sub _notifications {
 }
 
 sub _try {
-  my ($self, $oid) = @_;
+  my ($self, $oid, $options) = @_;
 
   my $doc = {
     query => bson_doc(
       state   => 'inactive',
       delayed => {'$lt' => bson_time},
-      task    => {'$in' => [keys %{$self->minion->tasks}]}
+      task    => {'$in' => [keys %{$self->minion->tasks}]},
+      queue   => {'$in' => $options->{queues} || ['default']}
     ),
-    fields => {args     => 1,  task    => 1, retries => 1},
-    sort   => {priority => -1, created => 1},
+    fields => {args             => 1,  task    => 1, retries => 1},
+    sort   => bson_doc(priority => -1, created => 1),
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
     new    => 1
   };
@@ -296,10 +300,23 @@ L<Minion::Backend::Mango> inherits all methods from L<Minion::Backend> and imple
 
 =head2 dequeue
 
-  my $info = $backend->dequeue($worker_id, 0.5);
+  my $job_info = $backend->dequeue($worker_id, 0.5);
+  my $job_info = $backend->dequeue($worker_id, 0.5, {queues => ['default']});
 
 Wait for job, dequeue it and transition from C<inactive> to C<active> state or
 return C<undef> if queue was empty.
+
+These options are currently available:
+
+=over 2
+
+=item queues
+
+  queues => ['high_priority']
+
+One or more queues to dequeue jobs from, defaults to C<default>.
+
+=back
 
 =head2 enqueue
 
@@ -322,6 +339,12 @@ Delay job for this many seconds from now.
   priority => 5
 
 Job priority, defaults to C<0>.
+
+=item queue
+
+  queue => 'high_priority'
+
+Queue to put job in, defaults to C<default>.
 
 =back
 
@@ -428,6 +451,12 @@ Delay job for this many seconds (from now).
   priority => 5
 
 Job priority.
+
+=item queue
+
+  queue => 'high_priority'
+
+Queue to put job in.
 
 =back
 
