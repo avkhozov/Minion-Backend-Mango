@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+
+0.98 2015-10-30T10:04:49Z
     - Added support for retrying jobs with a new priority.
     - Added support for queues.
     - Added attempts option for enqueue method.
