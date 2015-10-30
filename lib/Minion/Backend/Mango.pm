@@ -33,9 +33,10 @@ sub enqueue {
   $self->_notifications;
 
   my $doc = {
-    args    => $args,
-    created => bson_time,
-    delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
+    args     => $args,
+    attempts => $options->{attempts} // 1,
+    created  => bson_time,
+    delayed  => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
     priority => $options->{priority} // 0,
     queue    => $options->{queue}    // 'default',
     retries  => 0,
@@ -129,7 +130,7 @@ sub retry_job {
       (defined $options->{priority} ? (priority => $options->{priority}) : ()),
       (defined $options->{queue}    ? (queue    => $options->{queue})    : ())
     },
-    '$unset' => {map { $_ => '' } qw(finished result started worker)}
+    '$unset' => {map { $_ => '' } qw(finished started worker)}
   };
 
   return !!$self->jobs->update($query, $update)->{n};
@@ -168,6 +169,7 @@ sub _job_info {
   return undef unless my $job = shift;
   return {
     args     => $job->{args},
+    attempts => $job->{attempts},
     created  => $job->{created} ? $job->{created}->to_epoch : undef,
     delayed  => $job->{delayed} ? $job->{delayed}->to_epoch : undef,
     finished => $job->{finished} ? $job->{finished}->to_epoch : undef,
@@ -204,8 +206,8 @@ sub _try {
       task    => {'$in' => [keys %{$self->minion->tasks}]},
       queue   => {'$in' => $options->{queues} || ['default']}
     ),
-    fields => {args             => 1,  task    => 1, retries => 1},
-    sort   => bson_doc(priority => -1, created => 1),
+    fields => bson_doc(args     => 1,  attempts => 1, retries => 1, task => 1),
+    sort   => bson_doc(priority => -1, created  => 1),
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
     new    => 1
   };
@@ -312,7 +314,7 @@ These options are currently available:
 
 =item queues
 
-  queues => ['high_priority']
+  queues => ['important']
 
 One or more queues to dequeue jobs from, defaults to C<default>.
 
@@ -328,6 +330,12 @@ Enqueue a new job with C<inactive> state. These options are currently available:
 
 =over 2
 
+=item attempts
+
+  attempts => 25
+
+Number of times performing this job will be attempted, defaults to C<1>.
+
 =item delay
 
   delay => 10
@@ -342,7 +350,7 @@ Job priority, defaults to C<0>.
 
 =item queue
 
-  queue => 'high_priority'
+  queue => 'important'
 
 Queue to put job in, defaults to C<default>.
 
@@ -454,7 +462,7 @@ Job priority.
 
 =item queue
 
-  queue => 'high_priority'
+  queue => 'important'
 
 Queue to put job in.
 

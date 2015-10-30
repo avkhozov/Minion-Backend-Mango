@@ -59,10 +59,19 @@ Prefix for collections, defaults to `minion`.
 
 ## dequeue
 
-    my $info = $backend->dequeue($worker_id, 0.5);
+    my $job_info = $backend->dequeue($worker_id, 0.5);
+    my $job_info = $backend->dequeue($worker_id, 0.5, {queues => ['default']});
 
 Wait for job, dequeue it and transition from `inactive` to `active` state or
 return `undef` if queue was empty.
+
+These options are currently available:
+
+- queues
+
+        queues => ['important']
+
+    One or more queues to dequeue jobs from, defaults to `default`.
 
 ## enqueue
 
@@ -71,6 +80,12 @@ return `undef` if queue was empty.
     my $job_id = $backend->enqueue(foo => [@args] => {priority => 1});
 
 Enqueue a new job with `inactive` state. These options are currently available:
+
+- attempts
+
+        attempts => 25
+
+    Number of times performing this job will be attempted, defaults to `1`.
 
 - delay
 
@@ -83,6 +98,12 @@ Enqueue a new job with `inactive` state. These options are currently available:
         priority => 5
 
     Job priority, defaults to `0`.
+
+- queue
+
+        queue => 'important'
+
+    Queue to put job in, defaults to `default`.
 
 ## fail\_job
 
@@ -175,6 +196,18 @@ These options are currently available:
         delay => 10
 
     Delay job for this many seconds (from now).
+
+- priority
+
+        priority => 5
+
+    Job priority.
+
+- queue
+
+        queue => 'important'
+
+    Queue to put job in.
 
 ## stats
 
