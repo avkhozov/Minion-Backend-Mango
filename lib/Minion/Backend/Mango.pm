@@ -196,12 +196,12 @@ sub _try {
 
   my $doc = {
     query => bson_doc(
-      delayed => {'$lt' => bson_time},
       state   => 'inactive',
+      delayed => {'$lt' => bson_time},
       task    => {'$in' => [keys %{$self->minion->tasks}]}
     ),
-    fields => {args     => 1, task => 1, retries => 1},
-    sort   => {priority => -1},
+    fields => {args     => 1,  task    => 1, retries => 1},
+    sort   => {priority => -1, created => 1},
     update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
     new    => 1
   };
