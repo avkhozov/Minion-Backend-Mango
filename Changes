@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Added support for retrying jobs with a new priority.
+    - Improved tests.
 
 0.97 2015-05-19T04:28:55Z
     - Improved documentation.
