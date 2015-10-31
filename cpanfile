@@ -1,5 +1,5 @@
-requires Mango  => '1.17';
-requires Minion => '1.15';
+requires Mango  => '1.20';
+requires Minion => '3.02';
 
 on 'test' => sub {
   requires 'Test::More' => '0.98';
