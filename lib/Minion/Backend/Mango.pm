@@ -6,6 +6,7 @@ our $VERSION = '0.98';
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
 use Sys::Hostname 'hostname';
+use Time::HiRes 'time';
 
 has 'mango';
 has jobs          => sub { $_[0]->mango->db->collection($_[0]->prefix . '.jobs') };
@@ -14,14 +15,17 @@ has prefix        => 'minion';
 has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.workers') };
 
 sub dequeue {
-  my ($self, $oid, $wait, $options) = @_;
+  my ($self, $wid, $wait, $options) = @_;
 
   $self->_notifications;
 
-  if (my $job = $self->_try($oid, $options)) { return $self->_job_info($job) }
+  my $end = time + $wait;
+  do {
+    if (my $job = $self->_try($wid, $options)) { return $self->_job_info($job); }
+    $self->_await;
+  } while time < $end;
 
-  $self->_await;
-  return $self->_job_info($self->_try($oid, $options));
+  return $self->_job_info($self->_try($wid, $options));
 }
 
 sub enqueue {
@@ -29,7 +33,6 @@ sub enqueue {
   my $args    = shift // [];
   my $options = shift // {};
 
-  # Capped collection for notifications
   $self->_notifications;
 
   my $doc = {
@@ -53,7 +56,9 @@ sub fail_job { shift->_update(1, @_) }
 
 sub finish_job { shift->_update(0, @_) }
 
-sub job_info { $_[0]->_job_info($_[0]->jobs->find_one(bson_oid($_[1]))) }
+sub job_info {
+  $_[0]->_job_info($_[0]->jobs->find_one(bson_oid($_[1])));
+}
 
 sub list_jobs {
   my ($self, $skip, $limit, $options) = @_;
@@ -197,7 +202,7 @@ sub _notifications {
 }
 
 sub _try {
-  my ($self, $oid, $options) = @_;
+  my ($self, $wid, $options) = @_;
 
   my $doc = {
     query => bson_doc(
@@ -208,7 +213,7 @@ sub _try {
     ),
     fields => bson_doc(args     => 1,  attempts => 1, retries => 1, task => 1),
     sort   => bson_doc(priority => -1, created  => 1),
-    update => {'$set' => {started => bson_time, state => 'active', worker => $oid}},
+    update => {'$set' => {started => bson_time, state => 'active', worker => $wid}},
     new    => 1
   };
 
