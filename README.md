@@ -229,15 +229,15 @@ Get information about a worker or return `undef` if worker does not exist.
 
 # AUTHOR
 
-Andrey Khozov <avkhozov@gmail.com>
+Andrey Khozov &lt;avkhozov@gmail.com>
 
-Sebastian Riedel <sri@cpan.org>
+Sebastian Riedel &lt;sri@cpan.org>
 
 # LICENSE
 
 Copyright (C) 2014, Sebastian Riedel.
 
-Copyright (C) 2015, Andrey Khozov.
+Copyright (C) 2015-2016, Andrey Khozov.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

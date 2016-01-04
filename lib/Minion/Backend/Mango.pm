@@ -134,8 +134,7 @@ sub retry_job {
       delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
       (defined $options->{priority} ? (priority => $options->{priority}) : ()),
       (defined $options->{queue}    ? (queue    => $options->{queue})    : ())
-    },
-    '$unset' => {map { $_ => '' } qw(finished started worker)}
+    }
   };
 
   return !!$self->jobs->update($query, $update)->{n};
