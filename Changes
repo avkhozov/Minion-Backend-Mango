@@ -1,6 +1,11 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+    - Fully compatible with Minion 4.01.
+    - Fixed bug with wait timeout in dequeue.
+    - Fixed bug with update jobs if worker went away.
+    - Improved retry method for allow retry already inactive jobs.
+    - Improved tests.
 
 0.98 2015-10-30T10:04:49Z
     - Added support for retrying jobs with a new priority.
