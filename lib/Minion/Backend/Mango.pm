@@ -125,7 +125,7 @@ sub retry_job {
   my ($self, $oid, $retries) = (shift, shift, shift);
   my $options = shift // {};
 
-  my $query = {_id => $oid, retries => $retries, state => {'$in' => [qw(failed finished)]}};
+  my $query = {_id => $oid, retries => $retries, state => {'$in' => [qw(failed finished inactive)]}};
   my $update = {
     '$inc' => {retries => 1},
     '$set' => {
@@ -452,7 +452,8 @@ Reset job queue.
   my $bool = $backend->retry_job($job_id);
   my $bool = $backend->retry_job($job_id, {delay => 10});
 
-Transition from C<failed> or C<finished> state back to C<inactive>.
+Transition from C<failed> or C<finished> state back to C<inactive>, already
+C<inactive> jobs may also be retried to change options.
 
 These options are currently available:
 
