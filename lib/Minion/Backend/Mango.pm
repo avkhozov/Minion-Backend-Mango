@@ -108,9 +108,9 @@ sub repair {
 
   # Abandoned jobs
   my $jobs = $self->jobs;
-  my $cursor = $jobs->find({state => 'active'});
+  my $cursor = $jobs->find({state => 'active'}, {_id => 1, retries => 1});
   while (my $job = $cursor->next) {
-    $jobs->save({%$job, finished => bson_time, state => 'failed', result => 'Worker went away'})
+    $self->fail_job($job->{_id}, $job->{retries}, 'Worker went away')
       unless $workers->find_one($job->{worker});
   }
 
@@ -210,8 +210,8 @@ sub _try {
       task    => {'$in' => [keys %{$self->minion->tasks}]},
       queue   => {'$in' => $options->{queues} || ['default']}
     ),
-    fields => bson_doc(args     => 1,  attempts => 1, retries => 1, task => 1),
-    sort   => bson_doc(priority => -1, created  => 1),
+    fields => bson_doc(args     => 1,  retries => 1, task => 1),
+    sort   => bson_doc(priority => -1, created => 1),
     update => {'$set' => {started => bson_time, state => 'active', worker => $wid}},
     new    => 1
   };
@@ -224,7 +224,13 @@ sub _update {
 
   my $update = {finished => bson_time, result => $result, state => $fail ? 'failed' : 'finished'};
   my $query = {_id => $oid, retries => $retries, state => 'active'};
-  return !!$self->jobs->update($query, {'$set' => $update})->{n};
+
+  my $opts = {query => $query, update => {'$set' => $update}, fields => {attempts => 1}};
+  return undef unless my $job = $self->jobs->find_and_modify($opts);
+  return 1 if !$fail || (my $attempts = $job->{attempts}) == 1;
+  return 1 if $retries >= ($attempts - 1);
+  my $delay = $self->minion->backoff->($retries);
+  return $self->retry_job($oid, $retries, {delay => $delay});
 }
 
 sub _worker_info {
