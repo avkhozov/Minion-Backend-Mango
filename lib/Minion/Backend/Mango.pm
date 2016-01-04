@@ -501,7 +501,7 @@ Sebastian Riedel E<lt>sri@cpan.orgE<gt>
 
 Copyright (C) 2014, Sebastian Riedel.
 
-Copyright (C) 2015, Andrey Khozov.
+Copyright (C) 2015-2016, Andrey Khozov.
 
 This library is free software; you can redistribute it and/or modify it under the same terms as Perl itself.
 

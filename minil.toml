@@ -1,4 +1,4 @@
 authority = "cpan:AVKHOZOV"
-badges = ['travis']
+badges = ["travis"]
 module_maker = "ModuleBuildTiny"
 name = "Minion-Backend-Mango"
