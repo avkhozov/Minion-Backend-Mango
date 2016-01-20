@@ -44,7 +44,8 @@
          "requires" : {
             "Mango" : "1.20",
             "Minion" : "4.01",
-            "Mojolicious" : "0"
+            "Mojolicious" : "6.0",
+            "perl" : "5.010001"
          }
       },
       "test" : {
