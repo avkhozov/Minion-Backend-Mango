@@ -230,9 +230,9 @@ Get information about a worker or return `undef` if worker does not exist.
 
 # AUTHOR
 
-Andrey Khozov &lt;avkhozov@gmail.com>
+Andrey Khozov <avkhozov@gmail.com>
 
-Sebastian Riedel &lt;sri@cpan.org>
+Sebastian Riedel <sri@cpan.org>
 
 # LICENSE
 
