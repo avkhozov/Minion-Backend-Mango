@@ -155,6 +155,7 @@ sub stats {
   my $all     = $workers->find->count;
   my $stats   = {active_workers => $active, inactive_workers => $all - $active};
   $stats->{"${_}_jobs"} = $jobs->find({state => $_})->count for qw(active failed finished inactive);
+  $stats->{delayed_jobs} = $jobs->find({state => 'inactive', delayed => {'$gt' => bson_time}})->count;
   return $stats;
 }
 
