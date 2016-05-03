@@ -339,9 +339,10 @@ ok $minion->job($id)->remove, 'job has been removed';
 $worker->unregister;
 
 # Events
-my $pid;
+my ($pid, $enqueue);
 my $failed   = 0;
 my $finished = 0;
+$minion->once(enqueue => sub { $enqueue = pop });
 $minion->once(
   worker => sub {
     my ($minion, $worker) = @_;
@@ -363,7 +364,8 @@ $minion->once(
   }
 );
 $worker = $minion->worker->register;
-$minion->enqueue(add => [3, 3]);
+$id = $minion->enqueue(add => [3, 3]);
+is $enqueue, $id, 'enqueue event has been emitted';
 $minion->enqueue(add => [4, 3]);
 $job = $worker->dequeue(0);
 is $failed,   0, 'failed event has not been emitted';
