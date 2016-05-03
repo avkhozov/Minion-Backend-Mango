@@ -119,7 +119,12 @@ sub repair {
     {state => 'finished', finished => {'$lt' => bson_time((time - $minion->remove_after) * 1000)}});
 }
 
-sub reset { $_->options && $_->drop for $_[0]->workers, $_[0]->jobs }
+sub reset {
+  my $self = shift;
+
+  $_->options && $_->drop for $self->workers, $self->jobs, $self->notifications;
+  delete $self->{capped};
+}
 
 sub retry_job {
   my ($self, $oid, $retries) = (shift, shift, shift);
