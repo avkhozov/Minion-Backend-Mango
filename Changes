@@ -2,6 +2,9 @@ Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
 
+0.99_50 2016-05-03T07:56:26Z
+    - Fixed bug with wrong removing abandoned jobs.
+
 0.99 2016-01-04T20:11:41Z
     - Fully compatible with Minion 4.01.
     - Fixed bug with wait timeout in dequeue.
