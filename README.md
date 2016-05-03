@@ -133,6 +133,12 @@ Returns the same information as ["job\_info"](#job_info) but in batches.
 
 These options are currently available:
 
+- queue
+
+        queue => 'important'
+
+    List only jobs in this queue.
+
 - state
 
         state => 'inactive'

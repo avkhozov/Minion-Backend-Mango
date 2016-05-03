@@ -64,8 +64,9 @@ sub list_jobs {
   my ($self, $skip, $limit, $options) = @_;
 
   my $cursor = $self->jobs->find({state => {'$exists' => \1}});
-  $cursor->query->{state} = $options->{state} if $options->{state};
-  $cursor->query->{task}  = $options->{task}  if $options->{task};
+  for (qw/state task queue/) {
+    $cursor->query->{$_} = $options->{$_} if $options->{$_};
+  }
   $cursor->sort({_id => -1})->skip($skip)->limit($limit);
 
   return [map { $self->_job_info($_) } @{$cursor->all}];
@@ -400,6 +401,12 @@ Returns the same information as L</"job_info"> but in batches.
 These options are currently available:
 
 =over 2
+
+=item queue
+
+  queue => 'important'
+
+List only jobs in this queue.
 
 =item state
 
