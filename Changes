@@ -1,6 +1,8 @@
 Revision history for Perl extension Minion-Backend-Mango
 
 {{$NEXT}}
+
+1.00 2016-05-03T10:32:20Z
     - Added queue options to list_jo method.
     - Added delayed_jobs field to stats.
     - Improved tests for new Minion 5 features.

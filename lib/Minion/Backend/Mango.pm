@@ -1,7 +1,7 @@
 package Minion::Backend::Mango;
 use Mojo::Base 'Minion::Backend';
 
-our $VERSION = '0.99_50';
+our $VERSION = '1.00';
 
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
