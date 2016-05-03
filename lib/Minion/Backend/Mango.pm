@@ -108,7 +108,7 @@ sub repair {
 
   # Abandoned jobs
   my $jobs = $self->jobs;
-  my $cursor = $jobs->find({state => 'active'}, {_id => 1, retries => 1});
+  my $cursor = $jobs->find({state => 'active'}, {_id => 1, retries => 1, worker => 1});
   while (my $job = $cursor->next) {
     $self->fail_job($job->{_id}, $job->{retries}, 'Worker went away')
       unless $workers->find_one($job->{worker});
@@ -160,8 +160,8 @@ sub _await {
   my $self = shift;
 
   my $last = $self->{last} //= bson_oid;
-  my $cursor =
-    $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
+  my $cursor
+    = $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
   return undef unless my $doc = $cursor->next || $cursor->next;
   $self->{last} = $doc->{_id};
   return 1;
