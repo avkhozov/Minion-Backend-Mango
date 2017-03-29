@@ -4,7 +4,7 @@
       "Andrey Khozov <avkhozov@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v3.0.1, CPAN::Meta::Converter version 2.150005",
+   "generated_by" : "Minilla/v3.0.10, CPAN::Meta::Converter version 2.150010",
    "license" : [
       "perl_5"
    ],
@@ -66,7 +66,7 @@
          "web" : "https://github.com/avkhozov/Minion-Backend-Mango"
       }
    },
-   "version" : "1.00",
+   "version" : "1.01",
    "x_authority" : "cpan:AVKHOZOV",
    "x_serialization_backend" : "JSON::PP version 2.27300"
 }
