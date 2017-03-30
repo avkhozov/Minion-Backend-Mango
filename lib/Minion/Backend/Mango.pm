@@ -5,6 +5,7 @@ our $VERSION = '1.01';
 
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
+use Mojo::JSON 'encode_json';
 use Sys::Hostname 'hostname';
 use Time::HiRes 'time';
 
@@ -14,7 +15,22 @@ has notifications => sub { $_[0]->mango->db->collection($_[0]->prefix . '.notifi
 has prefix        => 'minion';
 has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.workers') };
 
-sub broadcast {}
+sub broadcast {
+  my ($self, $command, $args, $ids) = (shift, shift, shift || [], shift || []);
+  my @modified;
+  for my $id (@$ids){
+    my $doc = {
+        query => bson_doc(
+          _id => $id,
+        ),
+        update => {'$set' => {inbox => encode_json([$command, @$args])}},
+    };
+    my $d = $self->workers->find_and_modify($doc);
+    push @modified,$d if $d;
+  }
+  return [@modified];
+}
+
 sub receive { [] }
 
 sub dequeue {
