@@ -23,7 +23,7 @@ sub broadcast {
     $ids = [ map { bson_oid $_} @$ids ];
     return !!$self->workers->update(
         { _id    => { '$in' => $ids } },
-        { '$set' => { inbox => encode_json( [ $command, @$args ] ) } },
+        { '$set' => { inbox => encode_json( json => [ $command, @$args ] ) } },
         { multi => 1 }
     )->{n};
 }
