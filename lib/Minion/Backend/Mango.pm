@@ -128,7 +128,7 @@ sub register_worker {
 
     $self->jobs->ensure_index(
         bson_doc( state => 1, delayed => 1, task => 1, queue => 1 ) );
-    $self->workers->insert(
+    return $self->workers->insert(
         {
             host     => hostname,
             pid      => $$,
