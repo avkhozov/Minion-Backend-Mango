@@ -573,7 +573,7 @@ is $minion->job($id3)->info->{result}, undef,                      'no result';
 is $minion->job($id4)->info->{state},  'failed',                   'right state';
 is $minion->job($id4)->info->{result}, 'Non-zero exit status (1)', 'right result';
 $worker->unregister;
-$minion->reset;
+# $minion->reset;
 
 #Worker remote control commands
 $worker  = $minion->worker->register->process_commands;
