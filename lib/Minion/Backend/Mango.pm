@@ -5,7 +5,7 @@ our $VERSION = '1.01';
 
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
-use Mojo::JSON 'encode_json';
+use Mojo::JSON qw(encode_json decode_json);
 use Sys::Hostname 'hostname';
 use Time::HiRes 'time';
 
@@ -31,7 +31,17 @@ sub broadcast {
     )->{n};
 }
 
-sub receive { [] }
+sub receive {
+    my ( $self, $id ) = @_;
+    my $doc = $self->workers->find_and_modify(
+        {
+            query  => { _id    => bson_oid $id},
+            update => { '$set' => { inbox => '[]' } }
+        }
+    );
+    my $array = decode_json $doc->{inbox};
+    return $array ? $array->[0] : [];
+}
 
 sub dequeue {
     my ( $self, $wid, $wait, $options ) = @_;
