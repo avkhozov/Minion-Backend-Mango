@@ -115,13 +115,13 @@ sub list_workers {
 sub new { shift->SUPER::new( mango => Mango->new(@_) ) }
 
 sub register_worker {
-    my ( $self, $id ) = @_;
+    my ( $self, $id, $status ) = (shift, shift, shift || {});
 
     return $id
       if $id
       && $self->workers->find_and_modify(
         {
-            query  => { _id    => $id },
+            query  => { _id    => bson_oid $id },
             update => { '$set' => { notified => bson_time } }
         }
       );
