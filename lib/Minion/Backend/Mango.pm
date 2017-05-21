@@ -72,6 +72,7 @@ sub enqueue {
         delayed  => bson_time(
             $options->{delay} ? ( time + $options->{delay} ) * 1000 : 1
         ),
+        parents => {json => ($options->{parents} || [])},
         priority => $options->{priority} // 0,
         queue    => $options->{queue}    // 'default',
         retries  => 0,
