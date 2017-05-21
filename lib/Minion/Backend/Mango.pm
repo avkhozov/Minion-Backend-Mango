@@ -25,7 +25,7 @@ sub broadcast {
         { _id => { '$in' => $ids } },
         {
             '$set' =>
-              { inbox => encode_json( { json => [ $command, @$args ] } ) }
+              { inbox => encode_json( { json => [ [ $command, @$args ] ] } ) }
         },
         { multi => 1 }
     )->{n};
@@ -72,7 +72,7 @@ sub enqueue {
         delayed  => bson_time(
             $options->{delay} ? ( time + $options->{delay} ) * 1000 : 1
         ),
-        parents => {json => ($options->{parents} || [])},
+        parents => { json => ( $options->{parents} || [] ) },
         priority => $options->{priority} // 0,
         queue    => $options->{queue}    // 'default',
         retries  => 0,
@@ -334,7 +334,7 @@ sub _worker_info {
     my ( $self, $worker ) = @_;
 
     return undef unless $worker;
-    $worker = $self->workers->find_one( { _id => bson_oid $worker->{_id}} );
+    $worker = $self->workers->find_one( { _id => bson_oid $worker->{_id} } );
     my $cursor =
       $self->jobs->find( { state => 'active', worker => $worker->{_id} } );
     return {
