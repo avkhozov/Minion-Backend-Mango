@@ -39,7 +39,9 @@ sub receive {
             update => { '$set' => { inbox => '[]' } }
         }
     );
-    return [];
+    my $inbox = decode_json $doc->{inbox} if $doc->{inbox};
+    $inbox //= [];
+    return $inbox;
 }
 
 sub dequeue {
