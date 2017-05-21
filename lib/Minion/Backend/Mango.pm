@@ -25,7 +25,16 @@ sub broadcast {
     return !!$self->workers->update(
         { _id => { '$in' => $ids } },
         {
-            '$set' => { inbox => encode_json( [ $command, @$args ] ) }
+            '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
+        },
+        { multi => 1 }
+      )->{n}
+      if @$ids;
+
+    return !!$self->workers->update(
+        {},
+        {
+            '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
         },
         { multi => 1 }
     )->{n};
@@ -178,9 +187,10 @@ sub repair {
     # Old jobs
     $jobs->remove(
         {
-            state => 'finished',
-            finished =>
-              { '$lt' => bson_time( ( time - $minion->remove_after ) * 1000 ) }
+            state    => 'finished',
+            finished => {
+                '$lt' => bson_time( ( time - $minion->remove_after ) * 1000 )
+            }
         }
     );
 }
@@ -215,7 +225,10 @@ sub retry_job {
                 ? ( priority => $options->{priority} )
                 : ()
             ),
-            ( defined $options->{queue} ? ( queue => $options->{queue} ) : () )
+            (
+                defined $options->{queue} ? ( queue => $options->{queue} )
+                : ()
+            )
         }
     };
 
@@ -225,8 +238,9 @@ sub retry_job {
 sub stats {
     my $self = shift;
 
-    my $jobs    = $self->jobs;
-    my $active  = @{ $jobs->find( { state => 'active' } )->distinct('worker') };
+    my $jobs = $self->jobs;
+    my $active =
+      @{ $jobs->find( { state => 'active' } )->distinct('worker') };
     my $workers = $self->workers;
     my $all     = $workers->find->count;
     my $stats =
