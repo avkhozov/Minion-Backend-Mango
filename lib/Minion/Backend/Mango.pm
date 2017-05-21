@@ -33,14 +33,13 @@ sub broadcast {
 
 sub receive {
     my ( $self, $id ) = @_;
-    my $doc = $self->workers->find_and_modify(
+    my $doc = $self->workers->find(
         {
             query  => { _id    => bson_oid $id},
             update => { '$set' => { inbox => '[]' } }
         }
     );
-    my $array = decode_json $doc->{inbox};
-    return $array ? $array->[0] : [];
+    return [];
 }
 
 sub dequeue {
@@ -115,15 +114,18 @@ sub list_workers {
 sub new { shift->SUPER::new( mango => Mango->new(@_) ) }
 
 sub register_worker {
-    my ( $self, $id, $options ) = (shift, shift, shift || {});
+    my ( $self, $id, $options ) = ( shift, shift, shift || {} );
 
-    my $status = encode_json({json => $options->{status} || '{}' });
+    my $status = encode_json( { json => $options->{status} || '{}' } );
     return $id
       if $id
       && $self->workers->find_and_modify(
         {
-            query  => { _id    => bson_oid $id },
-            update => { '$set' => { notified => bson_time, status => $options->{status} } }
+            query  => { _id => bson_oid $id },
+            update => {
+                '$set' =>
+                  { notified => bson_time, status => $options->{status} }
+            }
         }
       );
 
@@ -328,9 +330,10 @@ sub _update {
 }
 
 sub _worker_info {
-    my $self = shift;
+    my ( $self, $worker ) = @_;
 
-    return undef unless my $worker = shift;
+    return undef unless $worker;
+    $worker = $self->workers->find_one( { _id => bson_oid $worker->{_id}} );
     my $cursor =
       $self->jobs->find( { state => 'active', worker => $worker->{_id} } );
     return {
