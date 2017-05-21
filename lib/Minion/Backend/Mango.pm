@@ -33,7 +33,7 @@ sub broadcast {
 
 sub receive {
     my ( $self, $id ) = @_;
-    my $doc = $self->workers->find(
+    my $doc = $self->workers->find_and_modify(
         {
             query  => { _id    => bson_oid $id},
             update => { '$set' => { inbox => '[]' } }
