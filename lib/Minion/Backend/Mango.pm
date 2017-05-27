@@ -4,7 +4,6 @@ use Mojo::Base 'Minion::Backend';
 our $VERSION = '1.01';
 
 use Mango;
-use Data::Dumper;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
 use Mojo::JSON qw(encode_json decode_json);
 use Sys::Hostname 'hostname';
