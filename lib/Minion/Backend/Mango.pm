@@ -5,257 +5,362 @@ our $VERSION = '1.01';
 
 use Mango;
 use Mango::BSON qw(bson_oid bson_time bson_doc);
+use Mojo::JSON qw(encode_json decode_json);
 use Sys::Hostname 'hostname';
 use Time::HiRes 'time';
 
 has 'mango';
-has jobs          => sub { $_[0]->mango->db->collection($_[0]->prefix . '.jobs') };
-has notifications => sub { $_[0]->mango->db->collection($_[0]->prefix . '.notifications') };
-has prefix        => 'minion';
-has workers       => sub { $_[0]->mango->db->collection($_[0]->prefix . '.workers') };
+has jobs => sub { $_[0]->mango->db->collection( $_[0]->prefix . '.jobs' ) };
+has notifications =>
+  sub { $_[0]->mango->db->collection( $_[0]->prefix . '.notifications' ) };
+has prefix => 'minion';
+has workers =>
+  sub { $_[0]->mango->db->collection( $_[0]->prefix . '.workers' ) };
 
-sub broadcast {}
-sub receive { [] }
+sub broadcast {
+    my ( $self, $command, $args, $ids ) =
+      ( shift, shift, shift || [], shift || [] );
+    if (@$ids) {
+        my $n_modified = $self->workers->update(
+            { _id => { '$in' => [ map { bson_oid $_} @$ids ] } },
+            {
+                '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
+            },
+            { multi => 1 }
+        )->{n};
+        return !!$n_modified if $n_modified;
+    }
+
+    return !!$self->workers->update(
+        {},
+        {
+            '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
+        },
+        { multi => 1 }
+    )->{n};
+}
+
+sub receive {
+    my ( $self, $id ) = @_;
+    my $doc = $self->workers->find_and_modify(
+        {
+            query  => { _id    => bson_oid $id},
+            update => { '$set' => { inbox => '[]' } }
+        }
+    );
+    my $inbox = decode_json $doc->{inbox} if $doc->{inbox};
+    $inbox //= [];
+    return $inbox;
+}
 
 sub dequeue {
-  my ($self, $wid, $wait, $options) = @_;
+    my ( $self, $wid, $wait, $options ) = @_;
 
-  $self->_notifications;
+    $self->_notifications;
 
-  my $end = time + $wait;
-  do {
-    if (my $job = $self->_try($wid, $options)) { return $self->_job_info($job); }
-    $self->_await;
-  } while time < $end;
+    my $end = time + $wait;
+    do {
+        if ( my $job = $self->_try( $wid, $options ) ) {
+            return $self->_job_info($job);
+        }
+        $self->_await;
+    } while time < $end;
 
-  return $self->_job_info($self->_try($wid, $options));
+    return $self->_job_info( $self->_try( $wid, $options ) );
 }
 
 sub enqueue {
-  my ($self, $task) = (shift, shift);
-  my $args    = shift // [];
-  my $options = shift // {};
+    my ( $self, $task ) = ( shift, shift );
+    my $args    = shift // [];
+    my $options = shift // {};
 
-  $self->_notifications;
+    $self->_notifications;
 
-  my $doc = {
-    args     => $args,
-    attempts => $options->{attempts} // 1,
-    created  => bson_time,
-    delayed  => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
-    priority => $options->{priority} // 0,
-    queue    => $options->{queue}    // 'default',
-    retries  => 0,
-    state    => 'inactive',
-    task     => $task
-  };
+    my $doc = {
+        args     => $args,
+        attempts => $options->{attempts} // 1,
+        created  => bson_time,
+        delayed  => bson_time(
+            $options->{delay} ? ( time + $options->{delay} ) * 1000 : 1
+        ),
+        parents => { json => ( $options->{parents} || [] ) },
+        priority => $options->{priority} // 0,
+        queue    => $options->{queue}    // 'default',
+        retries  => 0,
+        state    => 'inactive',
+        task     => $task
+    };
 
-  my $oid = $self->jobs->insert($doc);
-  $self->notifications->insert({c => 'created'});
-  return $oid;
+    my $oid = $self->jobs->insert($doc);
+    $self->notifications->insert( { c => 'created' } );
+    return $oid;
 }
 
-sub fail_job { shift->_update(1, @_) }
+sub fail_job { shift->_update( 1, @_ ) }
 
-sub finish_job { shift->_update(0, @_) }
+sub finish_job { shift->_update( 0, @_ ) }
 
 sub job_info {
-  $_[0]->_job_info($_[0]->jobs->find_one(bson_oid($_[1])));
+    $_[0]->_job_info( $_[0]->jobs->find_one( bson_oid( $_[1] ) ) );
 }
 
 sub list_jobs {
-  my ($self, $skip, $limit, $options) = @_;
+    my ( $self, $skip, $limit, $options ) = @_;
 
-  my $cursor = $self->jobs->find({state => {'$exists' => \1}});
-  for (qw/state task queue/) {
-    $cursor->query->{$_} = $options->{$_} if $options->{$_};
-  }
-  $cursor->sort({_id => -1})->skip($skip)->limit($limit);
+    my $cursor = $self->jobs->find( { state => { '$exists' => \1 } } );
+    for (qw/state task queue/) {
+        $cursor->query->{$_} = $options->{$_} if $options->{$_};
+    }
+    $cursor->sort( { _id => -1 } )->skip($skip)->limit($limit);
 
-  return [map { $self->_job_info($_) } @{$cursor->all}];
+    return [ map { $self->_job_info($_) } @{ $cursor->all } ];
 }
 
 sub list_workers {
-  my ($self, $skip, $limit) = @_;
-  my $cursor = $self->workers->find({pid => {'$exists' => \1}});
-  $cursor->sort({_id => -1})->skip($skip)->limit($limit);
-  return [map { $self->_worker_info($_) } @{$cursor->all}];
+    my ( $self, $skip, $limit ) = @_;
+    my $cursor = $self->workers->find( { pid => { '$exists' => \1 } } );
+    $cursor->sort( { _id => -1 } )->skip($skip)->limit($limit);
+    return [ map { $self->_worker_info($_) } @{ $cursor->all } ];
 }
 
-sub new { shift->SUPER::new(mango => Mango->new(@_)) }
+sub new { shift->SUPER::new( mango => Mango->new(@_) ) }
 
 sub register_worker {
-  my ($self, $id) = @_;
+    my ( $self, $id, $options ) = ( shift, shift, shift || {} );
 
-  return $id
-    if $id
-    && $self->workers->find_and_modify(
-    {query => {_id => $id}, update => {'$set' => {notified => bson_time}}});
+    my $status = encode_json( { json => $options->{status} || '{}' } );
+    return $id
+      if $id
+      && $self->workers->find_and_modify(
+        {
+            query  => { _id => bson_oid $id },
+            update => {
+                '$set' =>
+                  { notified => bson_time, status => $options->{status} }
+            }
+        }
+      );
 
-  $self->jobs->ensure_index(bson_doc(state => 1, delayed => 1, task => 1, queue => 1));
-  $self->workers->insert({host => hostname, pid => $$, started => bson_time, notified => bson_time});
+    $self->jobs->ensure_index(
+        bson_doc( state => 1, delayed => 1, task => 1, queue => 1 ) );
+    return $self->workers->insert(
+        {
+            host     => hostname,
+            pid      => $$,
+            started  => bson_time,
+            notified => bson_time,
+            status   => $options->{status},
+        }
+    );
 }
 
 sub remove_job {
-  my ($self, $oid) = @_;
-  my $doc = {_id => $oid, state => {'$in' => [qw(failed finished inactive)]}};
-  return !!$self->jobs->remove($doc)->{n};
+    my ( $self, $oid ) = @_;
+    my $doc =
+      { _id => $oid, state => { '$in' => [qw(failed finished inactive)] } };
+    return !!$self->jobs->remove($doc)->{n};
 }
 
 sub repair {
-  my $self   = shift;
-  my $minion = $self->minion;
+    my $self   = shift;
+    my $minion = $self->minion;
 
-  # Check worker registry
-  my $workers = $self->workers;
-  $workers->remove({notified => {'$lt' => bson_time((time - $minion->missing_after) * 1000)}});
+    # Check worker registry
+    my $workers = $self->workers;
+    $workers->remove(
+        {
+            notified => {
+                '$lt' => bson_time( ( time - $minion->missing_after ) * 1000 )
+            }
+        }
+    );
 
-  # Abandoned jobs
-  my $jobs = $self->jobs;
-  my $cursor = $jobs->find({state => 'active'}, {_id => 1, retries => 1, worker => 1});
-  while (my $job = $cursor->next) {
-    $self->fail_job($job->{_id}, $job->{retries}, 'Worker went away')
-      unless $workers->find_one($job->{worker});
-  }
+    # Abandoned jobs
+    my $jobs = $self->jobs;
+    my $cursor = $jobs->find( { state => 'active' },
+        { _id => 1, retries => 1, worker => 1 } );
+    while ( my $job = $cursor->next ) {
+        $self->fail_job( $job->{_id}, $job->{retries}, 'Worker went away' )
+          unless $workers->find_one( $job->{worker} );
+    }
 
-  # Old jobs
-  $jobs->remove(
-    {state => 'finished', finished => {'$lt' => bson_time((time - $minion->remove_after) * 1000)}});
+    # Old jobs
+    $jobs->remove(
+        {
+            state    => 'finished',
+            finished => {
+                '$lt' => bson_time( ( time - $minion->remove_after ) * 1000 )
+            }
+        }
+    );
 }
 
 sub reset {
-  my $self = shift;
+    my $self = shift;
 
-  $_->options && $_->drop for $self->workers, $self->jobs, $self->notifications;
-  delete $self->{capped};
+    $_->options && $_->drop
+      for $self->workers, $self->jobs, $self->notifications;
+    delete $self->{capped};
 }
 
 sub retry_job {
-  my ($self, $oid, $retries) = (shift, shift, shift);
-  my $options = shift // {};
+    my ( $self, $oid, $retries ) = ( shift, shift, shift );
+    my $options = shift // {};
 
-  my $query = {_id => $oid, retries => $retries, state => {'$in' => [qw(failed finished inactive)]}};
-  my $update = {
-    '$inc' => {retries => 1},
-    '$set' => {
-      retried => bson_time,
-      state   => 'inactive',
-      delayed => bson_time($options->{delay} ? (time + $options->{delay}) * 1000 : 1),
-      (defined $options->{priority} ? (priority => $options->{priority}) : ()),
-      (defined $options->{queue}    ? (queue    => $options->{queue})    : ())
-    }
-  };
+    my $query = {
+        _id     => $oid,
+        retries => $retries,
+        state   => { '$in' => [qw(failed finished inactive)] }
+    };
+    my $update = {
+        '$inc' => { retries => 1 },
+        '$set' => {
+            retried => bson_time,
+            state   => 'inactive',
+            delayed => bson_time(
+                $options->{delay} ? ( time + $options->{delay} ) * 1000 : 1
+            ),
+            (
+                defined $options->{priority}
+                ? ( priority => $options->{priority} )
+                : ()
+            ),
+            (
+                defined $options->{queue} ? ( queue => $options->{queue} )
+                : ()
+            )
+        }
+    };
 
-  return !!$self->jobs->update($query, $update)->{n};
+    return !!$self->jobs->update( $query, $update )->{n};
 }
 
 sub stats {
-  my $self = shift;
+    my $self = shift;
 
-  my $jobs    = $self->jobs;
-  my $active  = @{$jobs->find({state => 'active'})->distinct('worker')};
-  my $workers = $self->workers;
-  my $all     = $workers->find->count;
-  my $stats   = {active_workers => $active, inactive_workers => $all - $active};
-  $stats->{"${_}_jobs"} = $jobs->find({state => $_})->count for qw(active failed finished inactive);
-  $stats->{delayed_jobs} = $jobs->find({state => 'inactive', delayed => {'$gt' => bson_time}})->count;
-  return $stats;
+    my $jobs = $self->jobs;
+    my $active =
+      @{ $jobs->find( { state => 'active' } )->distinct('worker') };
+    my $workers = $self->workers;
+    my $all     = $workers->find->count;
+    my $stats =
+      { active_workers => $active, inactive_workers => $all - $active };
+    $stats->{"${_}_jobs"} = $jobs->find( { state => $_ } )->count
+      for qw(active failed finished inactive);
+    $stats->{delayed_jobs} =
+      $jobs->find( { state => 'inactive', delayed => { '$gt' => bson_time } } )
+      ->count;
+    return $stats;
 }
 
 sub unregister_worker { shift->workers->remove(shift) }
 
-sub worker_info { $_[0]->_worker_info($_[0]->workers->find_one($_[1])) }
+sub worker_info { $_[0]->_worker_info( $_[0]->workers->find_one( $_[1] ) ) }
 
 sub _await {
-  my $self = shift;
+    my $self = shift;
 
-  my $last = $self->{last} //= bson_oid;
-  my $cursor
-    = $self->notifications->find({_id => {'$gt' => $last}, c => 'created'})->tailable(1)->await_data(1);
-  return undef unless my $doc = $cursor->next || $cursor->next;
-  $self->{last} = $doc->{_id};
-  return 1;
+    my $last = $self->{last} //= bson_oid;
+    my $cursor = $self->notifications->find(
+        { _id => { '$gt' => $last }, c => 'created' } )->tailable(1)
+      ->await_data(1);
+    return undef unless my $doc = $cursor->next || $cursor->next;
+    $self->{last} = $doc->{_id};
+    return 1;
 }
 
 sub _job_info {
-  my $self = shift;
+    my $self = shift;
 
-  return undef unless my $job = shift;
-  return {
-    args     => $job->{args},
-    attempts => $job->{attempts},
-    created  => $job->{created} ? $job->{created}->to_epoch : undef,
-    delayed  => $job->{delayed} ? $job->{delayed}->to_epoch : undef,
-    finished => $job->{finished} ? $job->{finished}->to_epoch : undef,
-    id       => $job->{_id},
-    priority => $job->{priority},
-    queue    => $job->{queue},
-    result   => $job->{result},
-    retried  => $job->{retried} ? $job->{retried}->to_epoch : undef,
-    retries => $job->{retries} // 0,
-    started => $job->{started} ? $job->{started}->to_epoch : undef,
-    state   => $job->{state},
-    task    => $job->{task}
-  };
+    return undef unless my $job = shift;
+    return {
+        args     => $job->{args},
+        attempts => $job->{attempts},
+        created  => $job->{created} ? $job->{created}->to_epoch : undef,
+        delayed  => $job->{delayed} ? $job->{delayed}->to_epoch : undef,
+        finished => $job->{finished} ? $job->{finished}->to_epoch : undef,
+        id       => $job->{_id},
+        priority => $job->{priority},
+        queue    => $job->{queue},
+        result   => $job->{result},
+        retried  => $job->{retried} ? $job->{retried}->to_epoch : undef,
+        retries => $job->{retries} // 0,
+        started => $job->{started} ? $job->{started}->to_epoch : undef,
+        state   => $job->{state},
+        task    => $job->{task}
+    };
 }
 
 sub _notifications {
-  my $self = shift;
+    my $self = shift;
 
-  # We can only await data if there's a document in the collection
-  $self->{capped} ? return : $self->{capped}++;
-  my $notifications = $self->notifications;
-  return if $notifications->options;
-  $notifications->create({capped => \1, size => 1048576, max => 128});
-  $notifications->insert({});
+    # We can only await data if there's a document in the collection
+    $self->{capped} ? return : $self->{capped}++;
+    my $notifications = $self->notifications;
+    return if $notifications->options;
+    $notifications->create( { capped => \1, size => 1048576, max => 128 } );
+    $notifications->insert( {} );
 }
 
 sub _try {
-  my ($self, $wid, $options) = @_;
+    my ( $self, $wid, $options ) = @_;
 
-  my $doc = {
-    query => bson_doc(
-      state   => 'inactive',
-      delayed => {'$lt' => bson_time},
-      task    => {'$in' => [keys %{$self->minion->tasks}]},
-      queue   => {'$in' => $options->{queues} || ['default']}
-    ),
-    fields => bson_doc(args     => 1,  retries => 1, task => 1),
-    sort   => bson_doc(priority => -1, created => 1),
-    update => {'$set' => {started => bson_time, state => 'active', worker => $wid}},
-    new    => 1
-  };
+    my $doc = {
+        query => bson_doc(
+            state   => 'inactive',
+            delayed => { '$lt' => bson_time },
+            task    => { '$in' => [ keys %{ $self->minion->tasks } ] },
+            queue   => { '$in' => $options->{queues} || ['default'] }
+        ),
+        fields => bson_doc( args     => 1,  retries => 1, task => 1 ),
+        sort   => bson_doc( priority => -1, created => 1 ),
+        update => {
+            '$set' =>
+              { started => bson_time, state => 'active', worker => $wid }
+        },
+        new => 1
+    };
 
-  return $self->jobs->find_and_modify($doc);
+    return $self->jobs->find_and_modify($doc);
 }
 
 sub _update {
-  my ($self, $fail, $oid, $retries, $result) = @_;
+    my ( $self, $fail, $oid, $retries, $result ) = @_;
 
-  my $update = {finished => bson_time, result => $result, state => $fail ? 'failed' : 'finished'};
-  my $query = {_id => $oid, retries => $retries, state => 'active'};
+    my $update = {
+        finished => bson_time,
+        result   => $result,
+        state    => $fail ? 'failed' : 'finished'
+    };
+    my $query = { _id => $oid, retries => $retries, state => 'active' };
 
-  my $opts = {query => $query, update => {'$set' => $update}, fields => {attempts => 1}};
-  return undef unless my $job = $self->jobs->find_and_modify($opts);
-  return 1 if !$fail || (my $attempts = $job->{attempts}) == 1;
-  return 1 if $retries >= ($attempts - 1);
-  my $delay = $self->minion->backoff->($retries);
-  return $self->retry_job($oid, $retries, {delay => $delay});
+    my $opts = {
+        query  => $query,
+        update => { '$set' => $update },
+        fields => { attempts => 1 }
+    };
+    return undef unless my $job = $self->jobs->find_and_modify($opts);
+    return 1 if !$fail || ( my $attempts = $job->{attempts} ) == 1;
+    return 1 if $retries >= ( $attempts - 1 );
+    my $delay = $self->minion->backoff->($retries);
+    return $self->retry_job( $oid, $retries, { delay => $delay } );
 }
 
 sub _worker_info {
-  my $self = shift;
+    my ( $self, $worker ) = @_;
 
-  return undef unless my $worker = shift;
-  my $cursor = $self->jobs->find({state => 'active', worker => $worker->{_id}});
-  return {
-    host     => $worker->{host},
-    id       => $worker->{_id},
-    jobs     => [map { $_->{_id} } @{$cursor->all}],
-    pid      => $worker->{pid},
-    started  => $worker->{started}->to_epoch,
-    notified => $worker->{notified}->to_epoch
-  };
+    return undef unless $worker;
+    $worker = $self->workers->find_one( { _id => bson_oid $worker->{_id} } );
+    my $cursor =
+      $self->jobs->find( { state => 'active', worker => $worker->{_id} } );
+    return {
+        host     => $worker->{host},
+        id       => $worker->{_id},
+        jobs     => [ map { $_->{_id} } @{ $cursor->all } ],
+        pid      => $worker->{pid},
+        started  => $worker->{started}->to_epoch,
+        notified => $worker->{notified}->to_epoch
+    };
 }
 
 1;
