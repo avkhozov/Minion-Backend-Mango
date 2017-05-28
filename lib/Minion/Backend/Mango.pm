@@ -20,15 +20,16 @@ has workers =>
 sub broadcast {
     my ( $self, $command, $args, $ids ) =
       ( shift, shift, shift || [], shift || [] );
-    $ids = [ map { bson_oid $_} @$ids ];
-    return !!$self->workers->update(
-        { _id => { '$in' => $ids } },
-        {
-            '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
-        },
-        { multi => 1 }
-      )->{n}
-      if @$ids;
+    if (@$ids) {
+        my $n_modified = $self->workers->update(
+            { _id => { '$in' => [ map { bson_oid $_} @$ids ] } },
+            {
+                '$set' => { inbox => encode_json( [ [ $command, @$args ] ] ) }
+            },
+            { multi => 1 }
+        )->{n};
+        return !!$n_modified if $n_modified;
+    }
 
     return !!$self->workers->update(
         {},
