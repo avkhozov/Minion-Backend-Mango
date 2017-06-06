@@ -4,7 +4,7 @@
       "Andrey Khozov <avkhozov@gmail.com>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "Minilla/v3.0.10, CPAN::Meta::Converter version 2.150010",
+   "generated_by" : "Minilla/v3.0.11, CPAN::Meta::Converter version 2.150005",
    "license" : [
       "perl_5"
    ],
@@ -42,10 +42,9 @@
       },
       "runtime" : {
          "requires" : {
-            "Mango" : "1.20",
-            "Minion" : "5.05",
-            "Mojolicious" : "6.0",
-            "perl" : "5.010001"
+            "Mango" : "1.29",
+            "Minion" : "6.0",
+            "Mojolicious" : "7.0"
          }
       },
       "test" : {
@@ -68,5 +67,5 @@
    },
    "version" : "1.01",
    "x_authority" : "cpan:AVKHOZOV",
-   "x_serialization_backend" : "JSON::PP version 2.27300"
+   "x_serialization_backend" : "JSON::PP version 2.27300_01"
 }
