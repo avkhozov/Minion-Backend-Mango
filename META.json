@@ -65,7 +65,7 @@
          "web" : "https://github.com/avkhozov/Minion-Backend-Mango"
       }
    },
-   "version" : "1.01",
+   "version" : "1.02",
    "x_authority" : "cpan:AVKHOZOV",
    "x_serialization_backend" : "JSON::PP version 2.27300_01"
 }
